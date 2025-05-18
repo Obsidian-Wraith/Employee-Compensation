@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Experience Distribution</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .container { margin-bottom: 20px; }
+    label, select { margin: 5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <label for="roleSelect">Role:</label>
+    <select id="roleSelect"><option value="">All</option></select>
+
+    <label for="locationSelect">Location:</label>
+    <select id="locationSelect"><option value="">All</option></select>
+
+    <button id="loadChart">Load Chart</button>
+  </div>
+
+  <div class="container">
+    <canvas id="experienceChart" width="600" height="300"></canvas>
+  </div>
+
+  <script>
+    const baseUrl = 'http://localhost:5000';
+    let experienceChart = null;
+
+    function fetchFilterData() {
+      $.get(`${baseUrl}/data/employee_data`, data => {
+        const roles = [...new Set(data.map(e => e.role))];
+        const locations = [...new Set(data.map(e => e.location))];
+
+        roles.forEach(r => $('#roleSelect').append(`<option value="${r}">${r}</option>`));
+        locations.forEach(l => $('#locationSelect').append(`<option value="${l}">${l}</option>`));
+      });
+    }
+
+    function loadExperienceChart() {
+      const role = $('#roleSelect').val();
+      const location = $('#locationSelect').val();
+      let url = `${baseUrl}/data/experience_distribution`;
+
+      const params = [];
+      if (role) params.push(`role=${encodeURIComponent(role)}`);
+      if (location) params.push(`location=${encodeURIComponent(location)}`);
+      if (params.length) url += `?${params.join('&')}`;
+
+      $.get(url, data => {
+        console.log("API Data:", data); // DEBUG
+
+        if (!Array.isArray(data) || data.length === 0) {
+          alert("No data available for the selected filters.");
+          return;
+        }
+
+        const labels = data.map(e => e.experience_range);
+        const counts = data.map(e => e.employee_count);
+
+        const ctx = document.getElementById('experienceChart').getContext('2d');
+        if (experienceChart) experienceChart.destroy();
+
+        experienceChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Employee Count',
+              data: counts,
+              backgroundColor: 'rgba(153, 102, 255, 0.6)'
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { stepSize: 1 }
+              }
+            }
+          }
+        });
+      }).fail(err => {
+        console.error("API failed:", err);
+        alert("Failed to load data.");
+      });
+    }
+
+    $(document).ready(() => {
+      fetchFilterData();
+      $('#loadChart').on('click', loadExperienceChart);
+    });
+  </script>
+</body>
+</html>

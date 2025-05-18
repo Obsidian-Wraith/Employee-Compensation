@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Employee Dashboard</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    label, select, input { margin: 5px; }
+    table, th, td { border: 1px solid black; border-collapse: collapse; padding: 5px; }
+    table { width: 100%; margin-top: 10px; }
+    .container { margin-bottom: 30px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <label for="roleFilter">Role:</label>
+    <select id="roleFilter"></select>
+
+    <label for="locationFilter">Location:</label>
+    <select id="locationFilter"></select>
+
+    <label><input type="checkbox" id="includeInactive"> Include Inactive</label>
+
+    <label for="increment">Global Increment %:</label>
+    <input type="number" id="increment" step="0.1">
+    <button id="applyIncrement">Apply</button>
+
+    <button id="downloadCsv">Download CSV</button>
+  </div>
+
+  <div class="container">
+    <canvas id="locationChart" width="400" height="200"></canvas>
+  </div>
+
+  <div class="container">
+    <h3>Employee Table</h3>
+    <table id="employeeTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Role</th>
+          <th>Location</th>
+          <th>Experience</th>
+          <th>Compensation</th>
+          <th>New Compensation</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let employees = [];
+    let chart;
+
+    function fetchData() {
+      $.get("http://localhost:5000/data/employee_data", data => {
+        employees = data;
+        populateFilters();
+        render();
+      });
+    }
+
+    function populateFilters() {
+      const roles = [...new Set(employees.map(e => e.role))];
+      const locations = [...new Set(employees.map(e => e.location))];
+
+      $('#roleFilter').html(`<option value="">All</option>` + roles.map(r => `<option value="${r}">${r}</option>`).join(''));
+      $('#locationFilter').html(`<option value="">All</option>` + locations.map(l => `<option value="${l}">${l}</option>`).join(''));
+    }
+
+    function render() {
+      let role = $('#roleFilter').val();
+      let location = $('#locationFilter').val();
+      let includeInactive = $('#includeInactive').is(':checked');
+      let increment = parseFloat($('#increment').val()) || 0;
+
+      const filtered = employees.filter(e =>
+        (!role || e.role === role) &&
+        (!location || e.location === location) &&
+        (includeInactive || e.active)
+      );
+
+      $('#employeeTable tbody').html(filtered.map(e => `
+        <tr>
+          <td>${e.name}</td>
+          <td>${e.role}</td>
+          <td>${e.location}</td>
+          <td>${e.years_of_experience}</td>
+          <td>${e.current_comp.toFixed(2)}</td>
+          <td>${(e.current_comp * (1 + increment / 100)).toFixed(2)}</td>
+          <td>${e.active ? "Active" : "Inactive"}</td>
+        </tr>
+      `).join(''));
+
+      const locationAvg = {};
+      filtered.forEach(e => {
+        if (!locationAvg[e.location]) locationAvg[e.location] = [];
+        locationAvg[e.location].push(e.current_comp);
+      });
+
+      const labels = Object.keys(locationAvg);
+      const values = labels.map(loc => {
+        const comps = locationAvg[loc];
+        return comps.reduce((a, b) => a + b, 0) / comps.length;
+      });
+
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById('locationChart'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Average Compensation by Location',
+            data: values,
+            backgroundColor: 'rgba(75, 192, 192, 0.6)'
+          }]
+        }
+      });
+    }
+
+    $('#roleFilter, #locationFilter, #includeInactive').on('change', render);
+    $('#applyIncrement').on('click', render);
+
+    $('#downloadCsv').on('click', function() {
+      const rows = [['Name','Role','Location','Experience','Compensation','New Compensation','Status']];
+      const increment = parseFloat($('#increment').val()) || 0;
+
+      const role = $('#roleFilter').val();
+      const location = $('#locationFilter').val();
+      const includeInactive = $('#includeInactive').is(':checked');
+
+      const filtered = employees.filter(e =>
+        (!role || e.role === role) &&
+        (!location || e.location === location) &&
+        (includeInactive || e.active)
+      );
+
+      filtered.forEach(e => {
+        rows.push([
+          e.name,
+          e.role,
+          e.location,
+          e.years_of_experience,
+          e.current_comp.toFixed(2),
+          (e.current_comp * (1 + increment / 100)).toFixed(2),
+          e.active ? "Active" : "Inactive"
+        ]);
+      });
+
+      const csvContent = rows.map(e => e.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'employees.csv';
+      a.click();
+    });
+
+    $(document).ready(fetchData);
+  </script>
+</body>
+</html>
