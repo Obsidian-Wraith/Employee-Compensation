@@ -57,7 +57,7 @@ Design and build a basic Employee Compensation Forecasting Application for HR an
 
 ## Setup Instructions
 
-1. Database setup
+1. Database setup (Optional)
    - Install MYSQL software and create a root password
    - go to the location of the file and open terminal ![Screenshot (683)](https://github.com/user-attachments/assets/8db70d5b-1e13-4cd5-a868-6087d78ee0d9)
 
